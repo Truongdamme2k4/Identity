@@ -12,6 +12,8 @@ import com.identity.service.IUserService;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -29,11 +31,12 @@ public class UserService implements IUserService {
             throw new AppException(ErrorCode.USER_EXISTED);
         }
 
-        return userMapper.toUserResponse(
-                userRepository.save(
-                        userMapper.toUserEntity(request)
-                )
-        );
+        UserEntity userEntity = userMapper.toUserEntity(request);
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
+        userEntity.setPassword(passwordEncoder.encode(request.getPassword()));
+        userEntity = userRepository.save(userEntity);
+        return userMapper.toUserResponse(userEntity);
+
     }
 
     @Override

@@ -6,20 +6,12 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDate;
-
-@Data
 @Builder
+@Data
 @FieldDefaults(level = lombok.AccessLevel.PRIVATE)
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserResponse {
-    String id;
-    String username;
-    String firstName;
-    String lastName;
-    String email;
-    String phone;
-    String address;
-    LocalDate dob;
+public class AuthenticationResponse {
+    String token;
+    boolean authenticated;
 }
