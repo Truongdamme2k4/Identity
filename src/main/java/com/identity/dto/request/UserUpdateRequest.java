@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Set;
 
 @Data
 @Builder
@@ -22,4 +24,6 @@ public class UserUpdateRequest {
     String phone;
     String address;
     LocalDate dob;
+
+    List<String> roles;
 }

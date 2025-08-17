@@ -1,31 +1,30 @@
 package com.identity.entity;
-
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.util.Set;
 
-@Data
+@Getter
+@Setter
 @Builder
-@FieldDefaults(level = lombok.AccessLevel.PRIVATE)
 @NoArgsConstructor
 @AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @Entity
-@Table(name="user")
-public class UserEntity {
+public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
+
+    @Column(name = "username", unique = true, columnDefinition = "VARCHAR(255) COLLATE utf8mb4_unicode_ci") // Ensures unique usernames with proper collation
     String username;
     String password;
     String firstName;
     String lastName;
-    String email;
-    String phone;
-    String address;
     LocalDate dob;
+
+    @ManyToMany
+    Set<Role> roles;
 }

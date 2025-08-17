@@ -1,71 +1,95 @@
 package com.identity.service.impl;
 
+import com.identity.constant.PredefinedRole;
 import com.identity.dto.request.UserCreationRequest;
 import com.identity.dto.request.UserUpdateRequest;
 import com.identity.dto.response.UserResponse;
-import com.identity.entity.UserEntity;
+import com.identity.entity.Role;
+import com.identity.entity.User;
 import com.identity.exception.AppException;
 import com.identity.exception.ErrorCode;
 import com.identity.mapper.UserMapper;
+import com.identity.repository.RoleRepository;
 import com.identity.repository.UserRepository;
 import com.identity.service.IUserService;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.prepost.PostAuthorize;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
 import java.util.List;
 
 @Service
 @FieldDefaults(level = lombok.AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 @RequiredArgsConstructor
-public class UserService implements IUserService {
+public class UserService{
     UserRepository userRepository;
     UserMapper userMapper;
+    PasswordEncoder passwordEncoder;
+    RoleRepository roleRepository;
 
     public UserResponse createUser(UserCreationRequest request) {
-        if(userRepository.existsByUsername(request.getUsername())) {
+        User user = userMapper.toUser(request);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        HashSet<Role> roles = new HashSet<>();
+        roleRepository.findById(PredefinedRole.USER_ROLE).ifPresent(roles::add);
+
+        user.setRoles(roles);
+
+        try {
+            user = userRepository.save(user);
+        } catch (DataIntegrityViolationException exception) {
             throw new AppException(ErrorCode.USER_EXISTED);
         }
 
-        UserEntity userEntity = userMapper.toUserEntity(request);
-        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
-        userEntity.setPassword(passwordEncoder.encode(request.getPassword()));
-        userEntity = userRepository.save(userEntity);
-        return userMapper.toUserResponse(userEntity);
-
+        return userMapper.toUserResponse(user);
     }
 
-    @Override
-    public List<UserResponse> getAllUsers() {
-        List<UserEntity> userEntities = userRepository.findAll();
-        List<UserResponse> userResponses = userEntities.stream().map(userMapper::toUserResponse).toList();
-        return userResponses;
+    public UserResponse getMyInfo() {
+        var context = SecurityContextHolder.getContext();
+        String name = context.getAuthentication().getName();
+
+        User user = userRepository.findByUsername(name).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        return userMapper.toUserResponse(user);
     }
 
-    @Override
-    public UserResponse getUserById(String id) {
-        UserEntity userEntity = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
-        return userMapper.toUserResponse(userEntity);
+    @PostAuthorize("returnObject.username == authentication.name")
+    public UserResponse updateUser(String userId, UserUpdateRequest request) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        userMapper.updateUser(user, request);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        var roles = roleRepository.findAllById(request.getRoles());
+        user.setRoles(new HashSet<>(roles));
+
+        return userMapper.toUserResponse(userRepository.save(user));
     }
 
-    @Override
-    public UserResponse updateUser(String id, UserUpdateRequest request) {
-        UserEntity userEntity = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
-
-        userMapper.updateUser(userEntity, request);
-        return userMapper.toUserResponse(userRepository.save(userEntity));
+    @PreAuthorize("hasRole('ADMIN')")
+    public void deleteUser(String userId) {
+        userRepository.deleteById(userId);
     }
 
-    @Override
-    public void deleteUser(String id) {
-        userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
-        userRepository.deleteById(id);
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<UserResponse> getUsers() {
+        log.info("In method get Users");
+        return userRepository.findAll().stream().map(userMapper::toUserResponse).toList();
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    public UserResponse getUser(String id) {
+        return userMapper.toUserResponse(
+                userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED)));
     }
 }

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 @Data
 @Builder
@@ -22,4 +23,5 @@ public class UserResponse {
     String phone;
     String address;
     LocalDate dob;
+    Set<RoleResponse> roles;
 }
