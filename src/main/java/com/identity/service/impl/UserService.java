@@ -1,5 +1,6 @@
 package com.identity.service.impl;
 
+import com.identity.cache.BaseCacheManager;
 import com.identity.constant.PredefinedRole;
 import com.identity.dto.request.UserCreationRequest;
 import com.identity.dto.request.UserUpdateRequest;
@@ -12,6 +13,8 @@ import com.identity.mapper.UserMapper;
 import com.identity.repository.RoleRepository;
 import com.identity.repository.UserRepository;
 import com.identity.service.IUserService;
+import com.identity.utils.CacheUtility;
+import com.identity.utils.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +38,7 @@ public class UserService{
     UserMapper userMapper;
     PasswordEncoder passwordEncoder;
     RoleRepository roleRepository;
+    CacheUtility cacheUtility;
 
     public UserResponse createUser(UserCreationRequest request) {
         User user = userMapper.toUser(request);
@@ -47,6 +51,7 @@ public class UserService{
 
         try {
             user = userRepository.save(user);
+            cacheUtility.setUser(user, "CREATE");
         } catch (DataIntegrityViolationException exception) {
             throw new AppException(ErrorCode.USER_EXISTED);
         }
@@ -57,28 +62,26 @@ public class UserService{
     public UserResponse getMyInfo() {
         var context = SecurityContextHolder.getContext();
         String name = context.getAuthentication().getName();
-
-        User user = userRepository.findByUsername(name).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
+        String userId = JwtUtil.getJtiFromToken(context.getAuthentication().getCredentials().toString());
+        User user = cacheUtility.getUser(userId);
         return userMapper.toUserResponse(user);
     }
 
-    @PostAuthorize("returnObject.username == authentication.name")
     public UserResponse updateUser(String userId, UserUpdateRequest request) {
         User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
         userMapper.updateUser(user, request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-
         var roles = roleRepository.findAllById(request.getRoles());
         user.setRoles(new HashSet<>(roles));
-
+        cacheUtility.setUser(user, "UPDATE");
         return userMapper.toUserResponse(userRepository.save(user));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     public void deleteUser(String userId) {
-        userRepository.deleteById(userId);
+        User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        cacheUtility.setUser(user, "DELETE");
+        userRepository.delete(user);
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -90,6 +93,6 @@ public class UserService{
     @PreAuthorize("hasRole('ADMIN')")
     public UserResponse getUser(String id) {
         return userMapper.toUserResponse(
-                userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED)));
-    }
+                cacheUtility.getUser(id)
+        );}
 }
